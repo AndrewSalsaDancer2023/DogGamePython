@@ -1,5 +1,3 @@
-import traceback
-
 from models.MapModel import Map
 from typing import Optional, Any, Coroutine
 from game.utils.GameSession import GameSession
@@ -8,9 +6,12 @@ from game.utils.DataTypes import PlayerRecordItem, LootList, DogDirection, LootI
 from game.MapParser import MapStorage, LootConfig
 from game_exceptions.Exceptions import (PlayerAbsentException, InvalidSessionException,
                                         EmptyNameException, MapNotFoundException)
-from traceback import format_exc, print_exc
-import logging
-from game.utils.GameTimer import SaveDataCoroutineRunner
+from traceback import format_exc
+# import logging
+# from aiologger import Logger
+# from aiologger.handlers.files import AsyncFileHandler
+# from tempfile import NamedTemporaryFile
+# from game.utils.GameTimer import SaveDataCoroutineRunner
 from models.ConcreteRepository import (ConcreteRepository, convert_to_db_representation,
                                        convert_from_db_representation)
 
@@ -20,10 +21,15 @@ from game.utils.ModelSerialization import GameState
 from models.ConcreteRepository import ConcreteRepository, create_database
 from game.utils.Converter import convert_future
 from pyinstrument import Profiler
+import asyncio
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
+# logger = Logger.with_default_handlers(name='my-logger')
+# temp_file = NamedTemporaryFile(delete=False)
+# handler = AsyncFileHandler(filename=temp_file.name)
+# logger.add_handler(handler)
 
-# from game.utils.ModelSerialization import SerializeSessions
+
 
 LootParameters = (float, float)
 Maps = dict[str, Map]
@@ -35,7 +41,7 @@ config_path: str = "/data/config.json"
 
 class Game:
 
-    def __init__(self, storage: MapStorage, spawn_in_random_points : bool, repository: ConcreteRepository, exception_coro: Coroutine):
+    def __init__(self, storage: MapStorage, spawn_in_random_points : bool, repository: ConcreteRepository, exception_coro: Coroutine, logger):
         self.storage_ = storage
         # self.config_ = config
         # self.maps_ = {}
@@ -49,10 +55,10 @@ class Game:
         self.save_period = 0
         self.time_without_saving_ = 0
         self.repository_ = repository
-        self.data_saver_ = SaveDataCoroutineRunner()
+        # self.data_saver_ = SaveDataCoroutineRunner()
         self.exception_handler_ = exception_coro
-        # self.default_bag_capacity_ = 0
-
+        self.stop_flag = False
+        self.logger = logger
     def find_map(self, id_: Map.id) -> Optional[Map]:
         # return self.maps_.get(id_)
         return self.storage_.get_map(id_)
@@ -161,18 +167,30 @@ class Game:
 
         return None
 
-    def timer_handler(self) -> None:
+    async def timer_handler(self) -> None:
         try:
             period = self.get_tick_period()
 
             self.GenerateLoot(period)
             self.MoveDogs(period)
 
-            self.data_saver_.start(self.serialize_sessions, period)
-            self.data_saver_.start(self.handle_retired_players)
+            await self.serialize_sessions(period)
+            await self.handle_retired_players()
+            # self.data_saver_.start(self.serialize_sessions, period)
+            # self.data_saver_.start(self.handle_retired_players)
 
         except Exception as ex:
-            logger.exception(print_exc())
+            # logger.exception(ex.args)
+            await self.logger.exception(format_exc())
+
+    async def sleep_and_run(self, interval: int) -> None:
+        try:
+            period = float(interval) / 1000
+            while not self.stop_flag:
+                await asyncio.sleep(period)
+                await self.timer_handler()
+        except Exception as ex:
+            await self.logger.exception(format_exc())
 
     def set_save_period(self, period: int) -> None:
         self.save_period = period
@@ -266,7 +284,7 @@ class Game:
         session_list = []
 
         for session in self.sessions_:
-            if session.get_all_players().empty():
+            if not session.get_all_players():
                 session_list.append(session)
 
         for session in session_list:
@@ -283,11 +301,11 @@ class Game:
 
     async def get_retired_players(self, start: int, max_items: int) -> list[PlayerRecordItem]:
         try:
-            # res = await asyncio.wrap_future(self.data_saver_.start(self.repository_.get_retired, start, max_items))
-            res = await convert_future(self.data_saver_.start(self.repository_.get_retired, start, max_items))
+            # res = await convert_future(self.data_saver_.start(self.repository_.get_retired, start, max_items))
+            res = await self.repository_.get_retired(start, max_items)
             return convert_from_db_representation(res)
         except Exception as ex:
-            print(ex.args)
+            await self.logger.exception(format_exc())
 
     def set_dog_retirement_time(self, period: float) -> None:
         self.dog_retirement_time_ = period
@@ -295,13 +313,15 @@ class Game:
     def set_default_dog_speed(self, speed: float) -> None:
         self.default_dog_speed_ = speed
 
-def create_game(config_content: Any, repository: ConcreteRepository, exception_coro: Coroutine) -> Game:
+async def create_game(config_content: Any, repository: ConcreteRepository, exception_coro: Coroutine, logger) -> Game:
     storage = MapStorage()
     storage.parse_maps(config_content)
-    game = Game(storage, False, repository, exception_coro)
+    game = Game(storage, False, repository, exception_coro, logger)
 
-    game.data_saver_.start(create_database, 'postgres', 'records')
-    game.data_saver_.start(game.repository_.create_table)
+    # await create_database('postgres', 'records')
+    await game.repository_.create_table()
+    # game.data_saver_.start(create_database, 'postgres', 'records')
+    # game.data_saver_.start(game.repository_.create_table)
 
     game.set_default_dog_speed(storage.get_default_dog_speed())
     game.set_dog_retirement_time(storage.get_dog_retirement_time()*1000)

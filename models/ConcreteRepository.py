@@ -10,7 +10,8 @@ from asyncpg import DuplicateDatabaseError
 import threading
 
 Base = declarative_base()
-repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/scores'
+# repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/scores'
+repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/template1'
 template_url = 'postgresql://postgres:postgres@localhost/template1'
 
 class Player(Base):
@@ -41,14 +42,16 @@ def convert_from_db_representation(items: list[tuple]) ->list[PlayerRecordItem]:
 async def create_database(user: str, database: str) -> None:
     try:
         conn = await asyncpg.connect(template_url)
-        await conn.execute(f'CREATE DATABASE "{database}" OWNER "{user}"')
+        await conn.execute(f'CREATE DATABASE "{database}" OWNER "{user}";')
         await conn.close()
     except DuplicateDatabaseError:
         pass #this exception tells us that database already created
+    # except Exception as ex:
+    #     print(ex.args)
 
 class ConcreteRepository(IAbstractRepository):
     def __init__(self, repository_url: str = repository_url_default):
-        self.engine: AsyncEngine = create_async_engine(repository_url)
+        self.engine = create_async_engine(repository_url)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
         self.lock = threading.Lock()
 

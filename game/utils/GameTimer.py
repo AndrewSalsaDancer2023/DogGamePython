@@ -67,12 +67,13 @@ class GameTimer(DelayedCoroutineRunner):
         DelayedCoroutineRunner.__init__(self, interval)
         self.stop_flag = False
 
-    async def sleep_and_run(self, coro: Callable[[], None]) -> None:
+    # async def sleep_and_run(self, coro: Callable[[], None]) -> None:
+    async def sleep_and_run(self, coro) -> None:
         try:
             period = float(self.interval) / 1000
             while not self.stop_flag:
                 await asyncio.sleep(period)
-                coro()
+                await coro()
         except Exception as ex:
             logger.exception(format_exc())
 
@@ -81,23 +82,3 @@ class GameTimer(DelayedCoroutineRunner):
 
     def stop(self) -> None:
         self.stop_flag = True
-
-# def startTimer(sec):
-#     print('in startTimer')
-#     loop = asyncio.new_event_loop()
-#     thread_ = Thread(daemon = True, target = loop.run_forever)
-#     thread_.start()
-#     async def sleep_and_run():
-#         cnt = 0
-#         while True:
-#             await asyncio.sleep(sec)
-#             myAsyncFunc(cnt)
-#             cnt += 1
-#
-#     asyncio.run_coroutine_threadsafe(sleep_and_run(), loop)
-#
-# def myAsyncFunc(cnt):
-#     print(f'in myAsyncFunc: {cnt}')
-#
-# startTimer(1)
-
