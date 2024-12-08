@@ -43,21 +43,26 @@ async def lifespan(app: FastAPI):
         global dog_game, coro_timer, logger
 
         logger = Logger.with_default_handlers(name='my-logger')
-        temp_file = NamedTemporaryFile(delete=False)
+        temp_file = NamedTemporaryFile(prefix='log_', suffix='_file', dir='logs', delete=False)
         handler = AsyncFileHandler(filename=temp_file.name)
         logger.add_handler(handler)
 
         # await create_database('postgres', 'records')
-        # await repository.create_table()
-        dog_game = await create_game(config_content, repository, game_exception_handler, logger)
-        coro_timer = asyncio.create_task(dog_game.sleep_and_run(dog_game.get_tick_period()))
+        # await repository.create_table() !!! uncomment
+        await logger.info('Application started')
+        try:
+            dog_game = await create_game(config_content, repository, game_exception_handler, logger)
+            coro_timer = asyncio.create_task(dog_game.sleep_and_run(dog_game.get_tick_period()))
+        except Exception as ex:
+            await logger.exception(ex.args)
+            await logger.exception(format_exc())
         # game_timer = GameTimer(dog_game.get_tick_period())
         # game_timer.start(dog_game.timer_handler)
         yield
         # await repository.dispose_repository()
         coro_timer.cancel()
-        logger.info('Application shutdown')
-        logger.shutdown()
+        await logger.info('Application shutdown')
+        await logger.shutdown()
 
     except Exception as ex:
         await logger.exception(format_exc())
@@ -162,8 +167,8 @@ async def get_players_info():
     except Exception as ex:
         print(ex.args)
 
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8080)
-    #uvicorn.run(app, host="localhost", port=8080)
+# if __name__ == "__main__":
+    # import uvicorn
+#
+#     # uvicorn.run(app, host="0.0.0.0", port=8080)
+#     uvicorn.run(app, host="localhost", port=8080)

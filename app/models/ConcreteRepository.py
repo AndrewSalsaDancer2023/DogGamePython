@@ -10,8 +10,8 @@ from asyncpg import DuplicateDatabaseError
 import threading
 
 Base = declarative_base()
-# repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/scores'
-repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/template1'
+# repository_url_default = 'postgresql+asyncpg://postgres:postgres@localhost/template1'
+repository_url_default = 'postgresql+asyncpg://postgres:postgres@db/postgres'
 template_url = 'postgresql://postgres:postgres@localhost/template1'
 
 class Player(Base):

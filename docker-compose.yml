@@ -1,0 +1,43 @@
+networks:
+  internal:
+
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 15s
+      timeout: 10s
+    networks:
+      - internal
+
+  backend:
+    build: ./app
+    volumes:
+      - ./app/logs:/app/logs
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+
+
+  frontend:
+    build: ./rev_proxy
+    ports:
+      - 8080:80
+    networks:
+      - internal
+    depends_on:
+      - backend
+

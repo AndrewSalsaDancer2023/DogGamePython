@@ -320,8 +320,6 @@ async def create_game(config_content: Any, repository: ConcreteRepository, excep
 
     # await create_database('postgres', 'records')
     await game.repository_.create_table()
-    # game.data_saver_.start(create_database, 'postgres', 'records')
-    # game.data_saver_.start(game.repository_.create_table)
 
     game.set_default_dog_speed(storage.get_default_dog_speed())
     game.set_dog_retirement_time(storage.get_dog_retirement_time()*1000)
